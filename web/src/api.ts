@@ -31,20 +31,76 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
     window.dispatchEvent(new Event('et-logout'));
   }
   const data = res.status === 204 ? {} : await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as any).error || `Error ${res.status}`);
+  if (!res.ok) {
+    const err = new Error((data as any).error || `Error ${res.status}`) as Error & { data?: any };
+    err.data = data;
+    throw err;
+  }
   return data as T;
 }
 
 // ---- Types ----
-export type EntryType = 'income' | 'expense';
+export type EntryType = 'income' | 'expense' | 'transfer';
 export interface Entry {
   id: number;
   type: EntryType;
   amount: number;
-  category: string;
+  category: string | null;
   note: string | null;
   occurred_at: string;
   created_at: string;
+  account_id: number | null;
+  card_id: number | null;
+  from_account_id: number | null;
+  to_account_id: number | null;
+  to_card_id: number | null;
+  emi_plan_id: number | null;
+  source_label: string | null;
+  dest_label: string | null;
+}
+
+export type AccountType = 'bank' | 'cash';
+export interface Account {
+  id: number;
+  name: string;
+  type: AccountType;
+  is_default: boolean;
+  archived: boolean;
+  opening_balance: number;
+  balance: number;
+}
+export interface CreditCard {
+  id: number;
+  name: string;
+  credit_limit: number;
+  statement_day: number;
+  due_day: number;
+  archived: boolean;
+  outstanding: number;
+  available: number;
+  current_cycle_spend: number;
+  last_statement_amount: number;
+  due_date: string;
+}
+export interface Emi {
+  id: number;
+  card_id: number;
+  card_name: string;
+  principal: number;
+  months: number;
+  monthly: number;
+  start_month: string;
+  end_month: string;
+  elapsed: number;
+  remaining: number;
+  remaining_amount: number;
+  done: boolean;
+}
+export interface Balances {
+  accounts: Account[];
+  total_assets: number;
+  cards: CreditCard[];
+  emis: Emi[];
 }
 export interface Summary {
   totals: { income: number; expense: number; net: number };

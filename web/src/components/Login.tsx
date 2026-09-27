@@ -6,6 +6,8 @@ export function Login({ onAuth }: { onAuth: () => void }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [signupCode, setSignupCode] = useState('');
+  const [totp, setTotp] = useState('');
+  const [needTotp, setNeedTotp] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -16,11 +18,15 @@ export function Login({ onAuth }: { onAuth: () => void }) {
     try {
       const path = mode === 'login' ? '/api/auth/login' : '/api/auth/signup';
       const body =
-        mode === 'login' ? { username, password } : { username, password, signup_code: signupCode };
+        mode === 'login'
+          ? { username, password, ...(needTotp ? { code: totp } : {}) }
+          : { username, password, signup_code: signupCode };
       const res = await api<{ token: string; username: string }>(path, { body });
       setSession(res.token, res.username);
       onAuth();
     } catch (err) {
+      const data = (err as Error & { data?: { twofa_required?: boolean } }).data;
+      if (data?.twofa_required) setNeedTotp(true);
       setError((err as Error).message);
     } finally {
       setBusy(false);
@@ -64,6 +70,21 @@ export function Login({ onAuth }: { onAuth: () => void }) {
                 class="field"
                 value={signupCode}
                 onInput={(e) => setSignupCode((e.target as HTMLInputElement).value)}
+                required
+              />
+            </div>
+          )}
+          {mode === 'login' && needTotp && (
+            <div class="field-group">
+              <span class="field-label">Authenticator code</span>
+              <input
+                class="field"
+                inputMode="numeric"
+                autocomplete="one-time-code"
+                placeholder="6-digit code"
+                value={totp}
+                onInput={(e) => setTotp((e.target as HTMLInputElement).value)}
+                autofocus
                 required
               />
             </div>

@@ -27,19 +27,34 @@ One container = Fastify API + the built PWA + a single SQLite file.
 
 ```bash
 cp .env.example .env
-# edit .env: set SIGNUP_CODE to a long random string
+
+# set SIGNUP_CODE to any shared code, and generate a strong DB_KEY:
+openssl rand -base64 48        # copy the output into DB_KEY in .env
+# (no openssl? use: node -e "console.log(require('crypto').randomBytes(48).toString('base64'))")
+
 docker compose up -d --build
 ```
 
-Open `http://<server>:3000` → **Sign up** using your `SIGNUP_CODE` → log in.
+On first boot with an empty volume, the app creates a **fresh database that's encrypted from the start** — no migration needed (rekey-migration only runs if you already had a plaintext DB). Then open `http://<server>:3000` → **Sign up** using your `SIGNUP_CODE` → log in.
+
+> ⚠️ Save your `DB_KEY` somewhere safe and separate. If it's lost, the data is **permanently unrecoverable**, and you must never change it once data exists.
 
 ### Environment variables
 
 | Var           | Required | Default                 | Notes                                             |
 |---------------|----------|-------------------------|---------------------------------------------------|
 | `SIGNUP_CODE` | ✅       | —                       | Shared code required to create an account.         |
+| `DB_KEY`      | ✅       | —                       | Encrypts the DB at rest (SQLCipher). **Back it up; losing it = unrecoverable data.** |
 | `PORT`        |          | `3000`                  | Host port (container always listens on 3000).      |
 | `DB_PATH`     |          | `/app/data/expenses.db` | SQLite file path (kept on the `expense-data` volume). |
+
+### Security
+
+- **At rest:** the SQLite file is encrypted with `DB_KEY` (SQLCipher). On first boot with a key set, an existing plaintext DB is transparently rekeyed to encrypted. The file is useless if copied off the server without the key.
+- ⚠️ **Key safety:** store `DB_KEY` somewhere safe and separate from the volume. If you lose it the data is **permanently unrecoverable**, and you must never change it once data exists.
+- **In transit:** HTTPS/HSTS (behind your proxy) + security headers/CSP via helmet; login is rate-limited.
+- **2FA:** each user can optionally enable TOTP two-factor auth (Settings → Two-factor).
+- **Tokens:** passwords hashed with argon2; session/API tokens stored as hashes.
 
 ## Deploy behind HTTPS (required for iOS)
 
@@ -57,19 +72,16 @@ Then open `https://expenses.yourdomain.com` and follow **[SETUP-IOS.md](./SETUP-
 
 ## Backups
 
-All financial history lives in one SQLite file on the `expense-data` volume. Back it up regularly, e.g. a daily cron:
+All financial history lives in one SQLite file on the `expense-data` volume. Since it's **encrypted at rest**, you can copy the file directly — it stays encrypted (useless without `DB_KEY`). Stop the container first for a consistent copy:
 
 ```bash
-docker exec expense-tracker \
-  node -e "require('better-sqlite3')(process.env.DB_PATH).backup('/app/data/backup-'+new Date().toISOString().slice(0,10)+'.db')"
+docker compose stop
+docker run --rm -v expencetracker_expense-data:/data -v "$PWD":/out alpine \
+  cp /data/expenses.db /out/expenses-backup-$(date +%F).db
+docker compose start
 ```
 
-…or simply copy the volume file while the container is stopped:
-
-```bash
-docker run --rm -v expense-tracker_expense-data:/data -v "$PWD":/out alpine \
-  cp /data/expenses.db /out/expenses-backup.db
-```
+To restore, put the file back and boot with the **same `DB_KEY`**. Keep a copy of `DB_KEY` with (but ideally stored separately from) your backups — the backup is unrecoverable without it. The compose project prefix is `expencetracker` (from the folder name), so the volume is `expencetracker_expense-data`.
 
 ## Local development
 

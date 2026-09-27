@@ -59,34 +59,43 @@ export function EntryList({ version, onChange }: { version: number; onChange: ()
         ) : entries.length === 0 ? (
           <div class="empty">No entries yet.</div>
         ) : (
-          entries.map((e) => (
-            <div class="row">
-              <div class={`row-dot ${e.type}`}>
-                <i />
-              </div>
-              <div class="row-main">
-                <div class="row-cat">{e.category}</div>
-                <div class="row-meta">
-                  {e.occurred_at}
-                  {e.note ? ` · ${e.note}` : ''}
+          entries.map((e) => {
+            const where =
+              e.type === 'transfer'
+                ? `${e.source_label} → ${e.dest_label}`
+                : e.type === 'income'
+                ? `to ${e.dest_label}`
+                : `from ${e.source_label}`;
+            const sign = e.type === 'expense' ? '−' : e.type === 'income' ? '+' : '';
+            return (
+              <div class="row">
+                <div class={`row-dot ${e.type}`}>
+                  <i />
+                </div>
+                <div class="row-main">
+                  <div class="row-cat">{e.type === 'transfer' ? 'Transfer' : e.category}</div>
+                  <div class="row-meta">
+                    {e.occurred_at} · {where}
+                    {e.note ? ` · ${e.note}` : ''}
+                  </div>
+                </div>
+                <div class="row-right">
+                  <div class={`row-amount ${e.type}`}>
+                    {sign}
+                    {money(e.amount)}
+                  </div>
+                  <div class="row-actions">
+                    <button class="icon-circle" title="Edit" onClick={() => setEditing(e)}>
+                      <EditIcon />
+                    </button>
+                    <button class="icon-circle danger" title="Delete" onClick={() => setPendingDelete(e)}>
+                      <DeleteIcon />
+                    </button>
+                  </div>
                 </div>
               </div>
-              <div class="row-right">
-                <div class={`row-amount ${e.type}`}>
-                  {e.type === 'expense' ? '−' : '+'}
-                  {money(e.amount)}
-                </div>
-                <div class="row-actions">
-                  <button class="icon-circle" title="Edit" onClick={() => setEditing(e)}>
-                    <EditIcon />
-                  </button>
-                  <button class="icon-circle danger" title="Delete" onClick={() => setPendingDelete(e)}>
-                    <DeleteIcon />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
@@ -104,7 +113,7 @@ export function EntryList({ version, onChange }: { version: number; onChange: ()
       {pendingDelete && (
         <ConfirmDialog
           title="Delete entry?"
-          message={`${pendingDelete.category} · ${money(pendingDelete.amount)} on ${pendingDelete.occurred_at} will be permanently removed.`}
+          message={`${pendingDelete.type === 'transfer' ? 'Transfer' : pendingDelete.category} · ${money(pendingDelete.amount)} on ${pendingDelete.occurred_at} will be permanently removed.`}
           confirmLabel="Delete"
           danger
           busy={deleting}
@@ -116,24 +125,25 @@ export function EntryList({ version, onChange }: { version: number; onChange: ()
   );
 }
 
+// Edit keeps the entry's type fixed (to change type, delete + re-add). Transfers
+// edit amount/note/date only; income/expense also edit category.
 function EditModal({ entry, onClose, onSaved }: { entry: Entry; onClose: () => void; onSaved: () => void }) {
   const [amount, setAmount] = useState(String(entry.amount));
-  const [category, setCategory] = useState(entry.category);
+  const [category, setCategory] = useState(entry.category || '');
   const [note, setNote] = useState(entry.note || '');
   const [date, setDate] = useState(entry.occurred_at);
-  const [type, setType] = useState(entry.type);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const isTransfer = entry.type === 'transfer';
 
   async function save(e: Event) {
     e.preventDefault();
     setBusy(true);
     setError('');
     try {
-      await api(`/api/entries/${entry.id}`, {
-        method: 'PATCH',
-        body: { type, amount: parseFloat(amount), category, note: note || null, occurred_at: date },
-      });
+      const body: Record<string, unknown> = { amount: parseFloat(amount), note: note || null, occurred_at: date };
+      if (!isTransfer) body.category = category;
+      await api(`/api/entries/${entry.id}`, { method: 'PATCH', body });
       onSaved();
     } catch (err) {
       setError((err as Error).message);
@@ -144,23 +154,17 @@ function EditModal({ entry, onClose, onSaved }: { entry: Entry; onClose: () => v
   return (
     <div class="modal-backdrop" onClick={onClose}>
       <form class="modal glass" onClick={(e) => e.stopPropagation()} onSubmit={save}>
-        <h3>Edit entry</h3>
-        <div class="seg">
-          <button type="button" class={type === 'expense' ? 'on expense' : ''} onClick={() => setType('expense')}>
-            Expense
-          </button>
-          <button type="button" class={type === 'income' ? 'on income' : ''} onClick={() => setType('income')}>
-            Income
-          </button>
-        </div>
+        <h3>Edit {isTransfer ? 'transfer' : entry.type}</h3>
         <div class="field-group">
           <span class="field-label">Amount (₹)</span>
           <input class="field" type="number" step="0.01" min="0" value={amount} onInput={(e) => setAmount((e.target as HTMLInputElement).value)} />
         </div>
-        <div class="field-group">
-          <span class="field-label">Category</span>
-          <input class="field" value={category} onInput={(e) => setCategory((e.target as HTMLInputElement).value)} />
-        </div>
+        {!isTransfer && (
+          <div class="field-group">
+            <span class="field-label">Category</span>
+            <input class="field" value={category} onInput={(e) => setCategory((e.target as HTMLInputElement).value)} />
+          </div>
+        )}
         <div class="field-group">
           <span class="field-label">Note</span>
           <input class="field" value={note} onInput={(e) => setNote((e.target as HTMLInputElement).value)} />

@@ -9,6 +9,9 @@ services:
     environment:
       # REQUIRED: shared code needed to create an account (share only with people you want in).
       SIGNUP_CODE: ${SIGNUP_CODE:?set SIGNUP_CODE in .env}
+      # REQUIRED: encrypts the database at rest (SQLCipher). BACK THIS UP — if it's lost,
+      # the data is UNRECOVERABLE. Never change it once data exists (would orphan the DB).
+      DB_KEY: ${DB_KEY:?set DB_KEY in .env}
     volumes:
       - expense-data:/app/data
     healthcheck:

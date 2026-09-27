@@ -2,6 +2,9 @@ import { useEffect, useState } from 'preact/hooks';
 import { api, clearSession, getUser, type ApiToken } from '../api';
 import type { Theme } from '../theme';
 import { ConfirmDialog } from './ConfirmDialog';
+import { AccountManager } from './AccountManager';
+import { CardManager } from './CardManager';
+import { TwoFactor } from './TwoFactor';
 
 export function Settings({
   onLogout,
@@ -93,6 +96,21 @@ export function Settings({
             Log out
           </button>
         </div>
+      </div>
+
+      <div class="section">
+        <div class="section-label">Accounts</div>
+        <AccountManager />
+      </div>
+
+      <div class="section">
+        <div class="section-label">Credit cards</div>
+        <CardManager />
+      </div>
+
+      <div class="section">
+        <div class="section-label">Two-factor authentication</div>
+        <TwoFactor />
       </div>
 
       <div class="section">
