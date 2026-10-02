@@ -14,7 +14,8 @@ const id = z.number().int().positive();
 
 const entryBody = z.object({
   type: z.enum(['income', 'expense', 'transfer']).default('expense'),
-  amount: z.number().positive().finite(),
+  // coerce so a numeric string (e.g. a Shortcuts Text field) is accepted too.
+  amount: z.coerce.number({ invalid_type_error: 'amount must be a number' }).positive().finite(),
   category: z.string().trim().min(1).max(40).optional().nullable(),
   note: z.string().trim().max(280).optional().nullable(),
   occurred_at: dateStr.optional(),
@@ -99,7 +100,12 @@ export default async function entriesRoutes(app) {
 
   app.post('/api/entries', async (req, reply) => {
     const parsed = entryBody.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0].message });
+    if (!parsed.success) {
+      const i = parsed.error.issues[0];
+      const field = i.path.join('.') || 'body';
+      const msg = i.message === 'Required' ? `${field} is required` : `${field}: ${i.message}`;
+      return reply.code(400).send({ error: msg });
+    }
     const d = parsed.data;
 
     // Build the typed row, defaulting the source to the user's default account.
@@ -166,7 +172,12 @@ export default async function entriesRoutes(app) {
     const existing = getEntry.get(req.params.id, req.user.id);
     if (!existing) return reply.code(404).send({ error: 'Not found' });
     const parsed = entryPatch.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0].message });
+    if (!parsed.success) {
+      const i = parsed.error.issues[0];
+      const field = i.path.join('.') || 'body';
+      const msg = i.message === 'Required' ? `${field} is required` : `${field}: ${i.message}`;
+      return reply.code(400).send({ error: msg });
+    }
     const d = parsed.data;
 
     // Merge onto the existing row, keeping the entry's type fixed. CHECK enforces validity.

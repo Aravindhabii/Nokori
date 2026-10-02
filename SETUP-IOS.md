@@ -26,42 +26,41 @@ Log in on each device. (On older macOS, just bookmark it — the app still works
 
 ## 2. Build the "Add Expense" Shortcut (iPhone)
 
-> **Important:** Do **not** hand-type the JSON body as text. Use a **Dictionary** action and send it as JSON — Shortcuts then quotes and escapes every value for you (so a note with a comma, quote, or emoji can't break the request). We also check the response so you never get a false "Saved".
+This is a simple **4-action** shortcut — no lists, no menus, no Dictionary. You answer three prompts and it sends them.
 
-Open the **Shortcuts** app → **+** to create a new shortcut. Add these actions in order:
+Open the **Shortcuts** app → **+** to create a new shortcut. Search each action by name and add them **in this order**:
 
 1. **Ask for Input**
-   - Prompt: `Amount ₹` · Input Type: **Number**
-   - (This produces a variable called *Provided Input* — rename it to **Amount** if you like.)
-2. **Choose from List** ← *use this, not "Choose from Menu"*
-   - Tap to add the list items: `Food`, `Transport`, `Groceries`, `Bills`, `Shopping`, `Health`, `Entertainment`, `Other`.
-   - Its output variable is **Chosen Item**.
+   - Prompt: `Amount ₹`
+   - Input Type: **Number**
+2. **Ask for Input**
+   - Prompt: `Category`
+   - Input Type: **Text**  (you type it, e.g. `Food`. Keep spelling consistent so reports group nicely — any text is accepted.)
 3. **Ask for Input**
-   - Prompt: `Note (optional)` · Input Type: **Text**
-   - Turn **off** "Required" so you can leave it blank.
-4. **Dictionary** — add these four keys (tap the blue variable chips to insert values; don't type variable names literally):
-   | Key        | Type   | Value                          |
-   |------------|--------|--------------------------------|
-   | `type`     | Text   | `expense`                      |
-   | `amount`   | Number | *Amount* (from step 1)         |
-   | `category` | Text   | *Chosen Item* (from step 2)    |
-   | `note`     | Text   | *Provided Input* (from step 3) |
-5. **Get Contents of URL**
+   - Prompt: `Note (optional)`
+   - Input Type: **Text**  (leave blank when you don't need a note.)
+4. **Get Contents of URL**
    - URL: `https://<your-domain>/api/entries`
-   - Method: **POST**
-   - Request Body: **JSON** → select the **Dictionary** from step 4.
-   - Headers:
-     - `Authorization` : `Bearer <paste-your-token>`
-     - (Content-Type is set to `application/json` automatically when Body is JSON.)
-6. **If** — check the request succeeded before celebrating:
-   - Condition: **Contents of URL** *has any value* **and** *does not contain* `error`.
-   - **If true:** *Show Notification* → `Saved ₹` + *Amount* + ` ✓`
-   - **Otherwise:** *Show Notification* → `Failed to save ✗ — open the app` (and optionally *Show Result* of *Contents of URL* to see why).
-   - (A successful create returns the new entry as JSON, which contains `"id"` and no `error`. A failure returns `{"error":...}`.)
+   - Tap the **⌄ Show More** arrow to reveal the rest.
+   - **Method:** `POST`
+   - **Headers → Add header:** Key `Authorization`, Value `Bearer <your-token>` (paste the token from Step 1)
+   - **Request Body:** choose **JSON**, then **Add new field** four times:
+     | Field    | Type   | Value |
+     |----------|--------|-------|
+     | `type`     | Text   | `expense` |
+     | `amount`   | Number | tap value → **Select Variable** → the **1st** *Provided Input* (amount) |
+     | `category` | Text   | tap value → **Select Variable** → the **2nd** *Provided Input* (category) |
+     | `note`     | Text   | tap value → **Select Variable** → the **3rd** *Provided Input* (note) |
+5. *(Optional but nice)* **Show Notification**
+   - Text: `Saved ✓`
 
-Name the shortcut **Add Expense** and save.
+Name the shortcut **Add Expense** and tap **Done**.
 
-**Test it:** run the shortcut from the Shortcuts app. Enter an amount, pick a category, optionally a note with a comma or quote in it. You should see "Saved ✓", and the entry should appear in the app's **History** tab. Then deliberately break it once (wrong token) to confirm you get "Failed to save ✗" rather than a false success.
+> **The one thing to watch:** all three "Ask for Input" actions create a variable called **Provided Input**. When filling the JSON values, don't just tap the grey "Provided Input" chip above the keyboard (it inserts the *last* one) — tap the field, choose **Select Variable**, and pick the right one. They're listed in order: 1st = amount, 2nd = category, 3rd = note.
+>
+> You do **not** add a Content-Type header — picking **JSON** as the body sets it automatically.
+
+**Test it:** run the shortcut from the Shortcuts app (tap ▶). Enter an amount like `120`, a category like `Food`, and a note. You should see "Saved ✓", and the entry should appear in the app's **History** tab. If nothing shows up: re-check the URL, that the header is exactly `Bearer <token>`, and that you picked the correct variable for each field.
 
 ---
 

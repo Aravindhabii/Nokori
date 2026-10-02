@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Expense Tracker</string>
+    <string name="title_activity_main">Expense Tracker</string>
+    <string name="package_name">com.abiiaravindh.expensetracker</string>
+    <string name="custom_url_scheme">com.abiiaravindh.expensetracker</string>
+    <string name="shortcut_add_short">Add expense</string>
+    <string name="shortcut_add_long">Add an expense</string>
+    <string name="widget_desc">Quick-add an expense</string>
+</resources>

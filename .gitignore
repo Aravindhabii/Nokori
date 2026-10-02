@@ -11,3 +11,11 @@ data/
 # generated icons (rebuilt by scripts/make-icons.mjs during build)
 web/public/pwa-*.png
 web/public/apple-touch-icon.png
+
+# JetBrains / Android Studio IDE files (per-machine, regenerated)
+.idea/
+*.iml
+
+# Capacitor-generated web bundle inside native projects (recreated by `npx cap sync`)
+web/android/app/src/main/assets/public/
+web/ios/App/App/public/

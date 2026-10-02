@@ -43,8 +43,8 @@ await page.click('.navbar >> text=Reports');
 await page.waitForTimeout(800);
 await shot('04-reports');
 
-// Settings + generate token
-await page.click('.navbar >> text=Settings');
+// Settings (now the header gear) + generate token
+await page.click('button[title="Settings"]');
 await page.waitForSelector('text=API tokens');
 await page.click('button:has-text("Generate")');
 await page.waitForSelector('.token-reveal', { timeout: 5000 });

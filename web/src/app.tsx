@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
+import { Capacitor } from '@capacitor/core';
+import { App as CapApp } from '@capacitor/app';
+import { LocalNotifications } from '@capacitor/local-notifications';
+import { BiometricAuth } from '@aparajita/capacitor-biometric-auth';
 import { getToken } from './api';
+import { requestTab, consumePendingTab } from './nav';
+import { queueCount } from './offline';
 import { applyTheme, getTheme, type Theme } from './theme';
 import { Login } from './components/Login';
 import { QuickAdd } from './components/QuickAdd';
@@ -65,8 +71,12 @@ const moonIcon = (
   </svg>
 );
 
+const native = Capacitor.isNativePlatform();
+const biometricOn = () => localStorage.getItem('et_biometric') !== 'off'; // default on (native)
+
 export function App() {
   const [authed, setAuthed] = useState(!!getToken());
+  const [locked, setLocked] = useState(native && biometricOn());
 
   useEffect(() => {
     const onLogout = () => setAuthed(false);
@@ -74,11 +84,80 @@ export function App() {
     return () => window.removeEventListener('et-logout', onLogout);
   }, []);
 
+  // Native app lock: re-lock whenever the app returns from the background.
+  useEffect(() => {
+    if (!native) return;
+    let sub: { remove: () => void } | undefined;
+    CapApp.addListener('resume', () => {
+      if (biometricOn()) setLocked(true);
+    }).then((s) => (sub = s));
+    return () => sub?.remove();
+  }, []);
+
+  // Deep links / notification taps / app-shortcut → jump to the Add screen.
+  useEffect(() => {
+    if (!native) return;
+    const subs: { remove: () => void }[] = [];
+    const openIfAdd = (url?: string | null) => {
+      if (url && /add/i.test(url)) requestTab('add');
+    };
+    CapApp.getLaunchUrl().then((r) => openIfAdd(r?.url));
+    CapApp.addListener('appUrlOpen', (e) => openIfAdd(e.url)).then((s) => subs.push(s));
+    LocalNotifications.addListener('localNotificationActionPerformed', (e) => {
+      if ((e.notification.extra as { open?: string } | undefined)?.open === 'add') requestTab('add');
+    }).then((s) => subs.push(s));
+    return () => subs.forEach((s) => s.remove());
+  }, []);
+
+  async function unlock() {
+    try {
+      const info = await BiometricAuth.checkBiometry();
+      if (!info.isAvailable) return setLocked(false); // no biometry enrolled → don't lock out
+      await BiometricAuth.authenticate({
+        reason: 'Unlock Expense Tracker',
+        cancelTitle: 'Cancel',
+        allowDeviceCredential: true,
+        iosFallbackTitle: 'Use passcode',
+        androidTitle: 'Unlock Expense Tracker',
+      });
+      setLocked(false);
+    } catch {
+      /* stay locked; LockScreen shows a retry button */
+    }
+  }
+
+  useEffect(() => {
+    if (locked) unlock();
+  }, [locked]);
+
   return (
     <>
       <div class="ambient" />
-      {authed ? <Main onLogout={() => setAuthed(false)} /> : <Login onAuth={() => setAuthed(true)} />}
+      {locked ? (
+        <LockScreen onUnlock={unlock} />
+      ) : authed ? (
+        <Main onLogout={() => setAuthed(false)} />
+      ) : (
+        <Login onAuth={() => setAuthed(true)} />
+      )}
     </>
+  );
+}
+
+function LockScreen({ onUnlock }: { onUnlock: () => void }) {
+  return (
+    <div class="auth-screen">
+      <div class="auth-card glass" style={{ textAlign: 'center' }}>
+        <div class="auth-brand">
+          <div class="brand-logo" />
+          <h1>Locked</h1>
+          <p class="muted">Unlock to view your money</p>
+        </div>
+        <button class="btn-primary" onClick={onUnlock}>
+          Unlock
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -93,6 +172,35 @@ function Main({ onLogout }: { onLogout: () => void }) {
     setThemeState(t);
   }
 
+  // Honor a tab requested by a deep link / notification (cold start or while running).
+  useEffect(() => {
+    const p = consumePendingTab();
+    if (p) setTab(p);
+    const onNav = (e: Event) => setTab((e as CustomEvent).detail as Tab);
+    window.addEventListener('et-nav', onNav);
+    return () => window.removeEventListener('et-nav', onNav);
+  }, []);
+
+  // Offline / sync status indicator + refresh views after a successful sync.
+  const [net, setNet] = useState({ online: navigator.onLine, queued: queueCount() });
+  useEffect(() => {
+    const update = () => setNet({ online: navigator.onLine, queued: queueCount() });
+    const onSynced = () => {
+      update();
+      bump();
+    };
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    window.addEventListener('et-queue-changed', update);
+    window.addEventListener('et-synced', onSynced);
+    return () => {
+      window.removeEventListener('online', update);
+      window.removeEventListener('offline', update);
+      window.removeEventListener('et-queue-changed', update);
+      window.removeEventListener('et-synced', onSynced);
+    };
+  }, []);
+
   return (
     <div class="app">
       <header class="topbar">
@@ -102,6 +210,11 @@ function Main({ onLogout }: { onLogout: () => void }) {
             <div class="brand-title">Expense Tracker</div>
           </div>
           <div class="topbar-actions">
+            {(!net.online || net.queued > 0) && (
+              <span class={`net-pill ${net.online ? 'sync' : 'off'}`}>
+                {net.online ? `Syncing ${net.queued}` : 'Offline'}
+              </span>
+            )}
             <button
               class="icon-btn"
               title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}

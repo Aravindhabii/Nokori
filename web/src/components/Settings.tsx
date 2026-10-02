@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
+import { Capacitor } from '@capacitor/core';
 import { api, clearSession, getUser, type ApiToken } from '../api';
+import { scheduleDailyReminder, cancelDailyReminder } from '../notifications';
 import type { Theme } from '../theme';
 import { ConfirmDialog } from './ConfirmDialog';
 import { AccountManager } from './AccountManager';
@@ -22,6 +24,32 @@ export function Settings({
   const [copied, setCopied] = useState(false);
   const [pendingRevoke, setPendingRevoke] = useState<ApiToken | null>(null);
   const [revoking, setRevoking] = useState(false);
+  const isNative = Capacitor.isNativePlatform();
+  const [appLock, setAppLock] = useState(localStorage.getItem('et_biometric') !== 'off');
+
+  function toggleLock(on: boolean) {
+    localStorage.setItem('et_biometric', on ? 'on' : 'off');
+    setAppLock(on);
+  }
+
+  const [reminder, setReminder] = useState(localStorage.getItem('et_reminder') || 'off'); // 'HH:MM' | 'off'
+  const reminderOn = reminder !== 'off';
+  const reminderTime = reminderOn ? reminder : '21:00';
+  async function applyReminder(time: string) {
+    const [h, m] = time.split(':').map(Number);
+    const ok = await scheduleDailyReminder(h, m);
+    if (ok) {
+      localStorage.setItem('et_reminder', time);
+      setReminder(time);
+    } else {
+      alert('Enable notifications for this app to use reminders.');
+    }
+  }
+  async function turnOffReminder() {
+    await cancelDailyReminder();
+    localStorage.setItem('et_reminder', 'off');
+    setReminder('off');
+  }
 
   function load() {
     api<{ tokens: ApiToken[] }>('/api/tokens').then((r) => setTokens(r.tokens));
@@ -82,6 +110,49 @@ export function Settings({
           </div>
         </div>
       </div>
+
+      {isNative && (
+        <div class="section">
+          <div class="section-label">App lock</div>
+          <div class="card glass" style={{ padding: '6px' }}>
+            <div class="seg">
+              <button class={appLock ? 'on' : ''} onClick={() => toggleLock(true)}>
+                Face ID / Fingerprint
+              </button>
+              <button class={!appLock ? 'on' : ''} onClick={() => toggleLock(false)}>
+                Off
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isNative && (
+        <div class="section">
+          <div class="section-label">Daily reminder</div>
+          <div class="card glass" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div class="seg">
+              <button class={reminderOn ? 'on' : ''} onClick={() => applyReminder(reminderTime)}>
+                On
+              </button>
+              <button class={!reminderOn ? 'on' : ''} onClick={turnOffReminder}>
+                Off
+              </button>
+            </div>
+            {reminderOn && (
+              <label class="field-group">
+                <span class="field-label">Remind me at</span>
+                <input
+                  class="field"
+                  type="time"
+                  value={reminderTime}
+                  onInput={(e) => applyReminder((e.target as HTMLInputElement).value)}
+                />
+              </label>
+            )}
+          </div>
+        </div>
+      )}
 
       <div class="section">
         <div class="section-label">Account</div>
